@@ -72,62 +72,47 @@ export async function getCategories(): Promise<Category[]> {
  */
 export async function fetchSupabaseProducts(): Promise<{ products: Product[]; rawPrompts: ProductPrompt[] }> {
   try {
-    // Primary query on Supabase 'prompts' table joined with 'categories'
-    const { data: promptData, error: promptErr } = await supabase
+    // 1. Try querying 'prompts' table
+    let promptData: any[] = [];
+    const { data: pData, error: pErr } = await supabase
       .from("prompts")
-      .select("*, categories(id, name, slug)")
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (!promptErr && promptData && promptData.length > 0) {
+    if (!pErr && pData && pData.length > 0) {
+      promptData = pData;
+    } else {
+      // 2. Try querying 'products' table if prompts is empty or not found
+      const { data: prodData } = await supabase
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (prodData && prodData.length > 0) {
+        promptData = prodData;
+      }
+    }
+
+    if (promptData && promptData.length > 0) {
       const mappedProducts: Product[] = promptData.map((p: any) => ({
         id: p.id,
-        name: p.title || "Sản phẩm Prompt",
-        sku: p.slug ? p.slug.toUpperCase() : `PRM-${p.id.toString().substring(0, 6)}`,
-        category: p.categories?.name || p.ai_model || "Tổng hợp",
-        price: p.copy_count ? p.copy_count * 10000 : 150000,
-        stock: p.is_active !== false ? (p.view_count || 25) : 0,
-        image: p.thumbnail_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop",
-        rating: p.is_hot ? 5.0 : 4.8,
+        name: p.title || p.name || "Sản phẩm Prompt",
+        sku: p.sku || (p.slug ? p.slug.toUpperCase() : `PRM-${p.id.toString().substring(0, 6)}`),
+        category: p.category || p.categories?.name || p.ai_model || "Tổng hợp",
+        price: p.price !== undefined && p.price !== null ? p.price : (p.copy_count ? p.copy_count * 10000 : 150000),
+        stock: p.stock !== undefined && p.stock !== null ? p.stock : (p.is_active !== false ? (p.view_count || 25) : 0),
+        image: p.thumbnail_url || p.image || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop",
+        rating: p.rating ?? (p.is_hot ? 5.0 : 4.8),
         description: p.prompt_text || p.description || "",
         ai_model: p.ai_model || "ChatGPT",
         prompt_type: p.prompt_type || "text",
-        prompt_text: p.prompt_text || "",
+        prompt_text: p.prompt_text || p.description || "",
         category_id: p.category_id || "",
         is_active: p.is_active !== false,
         is_hot: !!p.is_hot,
       }));
 
       return { products: mappedProducts, rawPrompts: promptData };
-    }
-
-    // Secondary fallback on 'products' table (only if prompts is completely empty or error)
-    if (promptErr && promptErr.code !== "PGRST205") {
-      console.warn("Prompts query notice:", promptErr.message);
-    } else if (promptErr && promptErr.code === "PGRST205") {
-      const { data: prodData, error: prodErr } = await supabase
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (!prodErr && prodData && prodData.length > 0) {
-        const mappedProducts: Product[] = prodData.map((p: any) => ({
-          id: p.id,
-          name: p.name || p.title || "Sản phẩm Mới",
-          sku: p.sku || `SKU-${p.id.toString().substring(0, 6)}`,
-          category: p.category || "Thiết bị",
-          price: p.price ?? 250000,
-          stock: p.stock ?? 10,
-          image: p.image || p.thumbnail_url || "https://images.unsplash.com/photo-1560343090-f0409e92791a?w=300&q=80",
-          rating: p.rating ?? 4.8,
-          description: p.description || "",
-          ai_model: "ChatGPT",
-          prompt_type: "text",
-          is_active: true,
-          is_hot: false,
-        }));
-
-        return { products: mappedProducts, rawPrompts: [] };
-      }
     }
   } catch (err) {
     console.warn("Supabase fetch exception:", err);
@@ -137,7 +122,7 @@ export async function fetchSupabaseProducts(): Promise<{ products: Product[]; ra
 }
 
 /**
- * Insert new product/prompt into Supabase database (table 'prompts')
+ * Insert new product/prompt into Supabase database ('prompts' or 'products')
  */
 export async function createSupabaseProduct(payload: {
   title: string;
@@ -174,34 +159,34 @@ export async function createSupabaseProduct(payload: {
       updated_at: new Date().toISOString(),
     };
 
-    const { data, error } = await supabase
+    // Attempt 1: Insert into 'prompts'
+    const { data: prData, error: prErr } = await supabase
       .from("prompts")
       .insert([promptBody])
-      .select("*, categories(id, name)")
+      .select()
       .single();
 
-    if (!error && data) {
-      return { success: true, data };
+    if (!prErr && prData) {
+      return { success: true, data: prData };
     }
 
-    if (error && error.code !== "PGRST205") {
-      console.error("Prompts insert error:", error);
-      return { success: false, error: error.message };
-    }
+    // Attempt 2: Insert into 'products'
+    const prodBody = {
+      name: payload.title,
+      sku: slug.toUpperCase(),
+      category: payload.ai_model || "Sản phẩm",
+      price: 200000,
+      stock: payload.is_active !== false ? 50 : 0,
+      image: payload.thumbnail_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop",
+      description: payload.prompt_text || payload.description || "",
+      is_active: payload.is_active ?? true,
+      is_hot: payload.is_hot ?? false,
+      created_at: new Date().toISOString()
+    };
 
-    // Fallback to 'products' table only if 'prompts' table does not exist
     const { data: pData, error: pErr } = await supabase
       .from("products")
-      .insert([{
-        name: payload.title,
-        sku: slug.toUpperCase(),
-        category: payload.ai_model || "Sản phẩm",
-        price: 200000,
-        stock: 50,
-        image: payload.thumbnail_url,
-        description: payload.description,
-        created_at: new Date().toISOString()
-      }])
+      .insert([prodBody])
       .select()
       .single();
 
@@ -209,7 +194,7 @@ export async function createSupabaseProduct(payload: {
       return { success: true, data: pData };
     }
 
-    return { success: false, error: error?.message || pErr?.message || "Lỗi tạo sản phẩm" };
+    return { success: false, error: prErr?.message || pErr?.message || "Lỗi tạo sản phẩm trên Supabase" };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -252,31 +237,30 @@ export async function updateSupabaseProduct(
     if (payload.is_active !== undefined) updateBody.is_active = payload.is_active;
     if (payload.is_hot !== undefined) updateBody.is_hot = payload.is_hot;
 
-    const { error } = await supabase
+    // Try update on 'prompts'
+    const { error: prErr } = await supabase
       .from("prompts")
       .update(updateBody)
       .eq("id", id);
 
-    if (!error) return { success: true };
+    if (!prErr) return { success: true };
 
-    if (error && error.code !== "PGRST205") {
-      return { success: false, error: error.message };
-    }
-
-    // Fallback update on 'products' table only if 'prompts' is missing
+    // Fallback update on 'products'
     const { error: pErr } = await supabase
       .from("products")
       .update({
         name: payload.title,
-        description: payload.description,
+        description: payload.description || payload.prompt_text,
         image: payload.thumbnail_url,
+        is_active: payload.is_active,
+        is_hot: payload.is_hot,
         updated_at: new Date().toISOString()
       })
       .eq("id", id);
 
     if (!pErr) return { success: true };
 
-    return { success: false, error: error.message || pErr.message };
+    return { success: false, error: prErr?.message || pErr?.message || "Lỗi cập nhật sản phẩm trên Supabase" };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -287,19 +271,17 @@ export async function updateSupabaseProduct(
  */
 export async function deleteSupabaseProduct(id: string): Promise<{ success: boolean; error?: string }> {
   try {
+    if (typeof id === "string" && id.startsWith("prod_")) {
+      return { success: true };
+    }
+
     // 1. Delete from 'prompts' table
     const { error: prErr } = await supabase.from("prompts").delete().eq("id", id);
     if (!prErr) {
       return { success: true };
     }
 
-    // If prompts deletion had non-PGRST205 error, return error
-    if (prErr && prErr.code !== "PGRST205") {
-      console.error("Prompts delete error:", prErr);
-      return { success: false, error: prErr.message };
-    }
-
-    // 2. Fallback delete on 'products' table only if 'prompts' table doesn't exist
+    // 2. Fallback delete on 'products' table
     const { error: pErr } = await supabase.from("products").delete().eq("id", id);
     if (!pErr) {
       return { success: true };

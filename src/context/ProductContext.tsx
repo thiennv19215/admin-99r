@@ -223,29 +223,13 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }) => {
     const supaRes = await createSupabaseProduct(payload);
     
-    const matchedCategory = categories.find(c => c.id === payload.category_id)?.name || payload.ai_model || "Tổng hợp";
-    
-    const newProd: Product = {
-      id: supaRes.data?.id || "prod_" + Date.now(),
-      name: payload.title,
-      sku: payload.title.toLowerCase().substring(0, 10).replace(/\s+/g, '-').toUpperCase(),
-      category: matchedCategory,
-      price: 250000,
-      stock: payload.is_active !== false ? 50 : 0,
-      image: payload.thumbnail_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop",
-      rating: payload.is_hot ? 5.0 : 4.8,
-      description: payload.prompt_text || payload.description || "",
-      ai_model: payload.ai_model,
-      prompt_type: payload.prompt_type,
-      prompt_text: payload.prompt_text,
-      category_id: payload.category_id,
-      is_active: payload.is_active,
-      is_hot: payload.is_hot
-    };
+    if (supaRes && !supaRes.success) {
+      showToast(`Lỗi thêm sản phẩm lên Supabase: ${supaRes.error}`, "danger");
+      throw new Error(supaRes.error || "Lỗi tạo sản phẩm trên Supabase");
+    }
 
-    const updated = [newProd, ...products];
-    saveProductsToStorage(updated);
-    showToast(`Đã thêm sản phẩm "${newProd.name}" lên Supabase`, "success");
+    await syncSupabaseData();
+    showToast(`Đã thêm sản phẩm "${payload.title}" lên Supabase thành công`, "success");
   };
 
   const updateProduct = async (id: string, payload: {
@@ -260,41 +244,25 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     is_hot?: boolean;
   }) => {
     const res = await updateSupabaseProduct(id, payload);
-    if (res && !res.success && res.error) {
-      throw new Error(res.error);
+    if (res && !res.success) {
+      showToast(`Lỗi cập nhật sản phẩm: ${res.error}`, "danger");
+      throw new Error(res.error || "Lỗi cập nhật sản phẩm");
     }
 
-    const matchedCategory = categories.find(c => c.id === payload.category_id)?.name;
-
-    const updated = products.map(p => {
-      if (p.id === id) {
-        return {
-          ...p,
-          name: payload.title !== undefined ? payload.title : p.name,
-          category: matchedCategory || (payload.ai_model ? payload.ai_model : p.category),
-          image: payload.thumbnail_url !== undefined ? payload.thumbnail_url : p.image,
-          description: payload.description !== undefined ? payload.description : (payload.prompt_text || p.description),
-          ai_model: payload.ai_model !== undefined ? payload.ai_model : p.ai_model,
-          prompt_type: payload.prompt_type !== undefined ? payload.prompt_type : p.prompt_type,
-          prompt_text: payload.prompt_text !== undefined ? payload.prompt_text : p.prompt_text,
-          category_id: payload.category_id !== undefined ? payload.category_id : p.category_id,
-          is_active: payload.is_active !== undefined ? payload.is_active : p.is_active,
-          is_hot: payload.is_hot !== undefined ? payload.is_hot : p.is_hot,
-          stock: payload.is_active === false ? 0 : (p.stock || 25)
-        };
-      }
-      return p;
-    });
-
-    saveProductsToStorage(updated);
+    await syncSupabaseData();
     showToast(`Đã cập nhật sản phẩm thành công`, "success");
   };
 
   const deleteProduct = async (id: string) => {
     const item = products.find(p => p.id === id);
-    await deleteSupabaseProduct(id);
-    const updated = products.filter(p => p.id !== id);
-    saveProductsToStorage(updated);
+    const res = await deleteSupabaseProduct(id);
+    
+    if (res && !res.success) {
+      showToast(`Lỗi xóa sản phẩm: ${res.error}`, "danger");
+      return;
+    }
+
+    await syncSupabaseData();
     showToast(`Đã xóa sản phẩm "${item?.name || 'Sản phẩm'}" khỏi Supabase`, "danger");
   };
 
@@ -303,9 +271,13 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!item) return;
     const newStatus = !item.is_active;
 
-    await updateSupabaseProduct(id, { is_active: newStatus });
-    const updated = products.map(p => p.id === id ? { ...p, is_active: newStatus, stock: newStatus ? 30 : 0 } : p);
-    saveProductsToStorage(updated);
+    const res = await updateSupabaseProduct(id, { is_active: newStatus });
+    if (res && !res.success) {
+      showToast(`Lỗi chuyển trạng thái: ${res.error}`, "danger");
+      return;
+    }
+
+    await syncSupabaseData();
     showToast(`Đã ${newStatus ? 'Bật' : 'Tắt'} trạng thái sản phẩm "${item.name}"`, newStatus ? "success" : "warning");
   };
 
