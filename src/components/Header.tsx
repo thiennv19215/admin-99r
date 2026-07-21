@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useProduct } from "@/context/ProductContext";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -18,6 +18,24 @@ import {
 export const Header: React.FC = () => {
   const { searchQuery, setSearchQuery, setIsAddModalOpen, theme, toggleTheme, filteredProducts, showToast, syncSupabaseData } = useProduct();
   const { logout } = useAuth();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Global Keyboard Shortcuts (Ctrl + K for Search, Ctrl + N for Add New)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        setIsAddModalOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [setIsAddModalOpen]);
 
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,ID,Tên sản phẩm,Mã SKU,Danh mục,Giá bán,Tồn kho,Xếp hạng\n";
@@ -53,16 +71,20 @@ export const Header: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Search Bar */}
+        {/* Search Bar with Ctrl+K shortcut badge */}
         <div className="relative w-64">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
+            ref={searchInputRef}
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Tìm kiếm sản phẩm, SKU..."
-            className="w-full bg-slate-800/80 border border-slate-700/80 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-full py-2 pl-10 pr-4 text-xs text-white placeholder-slate-400 outline-none transition"
+            className="w-full bg-slate-800/80 border border-slate-700/80 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 rounded-full py-2 pl-10 pr-12 text-xs text-white placeholder-slate-400 outline-none transition"
           />
+          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 bg-slate-700/60 px-1.5 py-0.5 rounded border border-slate-600">
+            Ctrl K
+          </kbd>
         </div>
 
         {/* Sync Supabase Button */}
@@ -101,13 +123,16 @@ export const Header: React.FC = () => {
           <span>Xuất CSV</span>
         </button>
 
-        {/* Add Product Button */}
+        {/* Add Product Button with Ctrl+N badge */}
         <button
           onClick={() => setIsAddModalOpen(true)}
           className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-500/25 flex items-center gap-2 transition active:scale-95"
         >
           <Plus className="w-4 h-4" />
           <span>Thêm Sản Phẩm Mới</span>
+          <kbd className="hidden sm:inline-block text-[10px] bg-indigo-700/60 px-1.5 py-0.5 rounded border border-indigo-400/40 text-indigo-100">
+            Ctrl N
+          </kbd>
         </button>
 
         {/* Header Logout Quick Button */}
