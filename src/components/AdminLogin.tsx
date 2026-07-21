@@ -43,9 +43,9 @@ export const AdminLogin: React.FC = () => {
           <div className="w-14 h-14 bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center font-extrabold text-2xl text-white shadow-lg shadow-indigo-500/30 mb-4 border border-indigo-400/20">
             A
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white">Cổng Đăng Nhập Admin</h1>
-          <p className="text-xs text-slate-400 mt-1.5">
-            Bạn cần phải đăng nhập tài khoản Admin để có quyền thêm, sửa, xóa sản phẩm
+          <h1 className="text-2xl font-extrabold tracking-tight text-white">Cổng Đăng Nhập Quản Trị</h1>
+          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+            Hệ thống yêu cầu xác thực. <span className="text-amber-400 font-semibold">Chỉ tài khoản Admin mới có quyền truy cập</span> vào trang quản trị sản phẩm.
           </p>
         </div>
 

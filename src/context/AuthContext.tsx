@@ -36,24 +36,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Helper check for admin authorization
+  const isAdminAccount = (email?: string | null, metadataRole?: string | null): boolean => {
+    if (!email) return false;
+    const lowerEmail = email.toLowerCase().trim();
+    if (metadataRole === "admin" || metadataRole === "Super Admin") return true;
+    return (
+      lowerEmail === "admin@meohd.io.vn" ||
+      lowerEmail === "admin@adminpulse.io" ||
+      lowerEmail.startsWith("admin@") ||
+      lowerEmail.includes("admin")
+    );
+  };
+
   useEffect(() => {
     // Check Supabase session first
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          const loggedUser: User = {
-            id: session.user.id,
-            name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || "Admin User",
-            email: session.user.email || "admin@meohd.io.vn",
-            role: "Super Admin",
-            avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80",
-          };
-          setUser(loggedUser);
-          setAuthCookie("admin_auth_session", JSON.stringify(loggedUser), 7);
-          setAuthCookie("admin_token", loggedUser.id, 7);
-          setIsLoading(false);
-          return;
+          const userEmail = session.user.email;
+          const userRole = session.user.user_metadata?.role;
+
+          if (isAdminAccount(userEmail, userRole)) {
+            const loggedUser: User = {
+              id: session.user.id,
+              name: session.user.user_metadata?.full_name || userEmail?.split('@')[0] || "Admin User",
+              email: userEmail || "admin@meohd.io.vn",
+              role: "Super Admin",
+              avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80",
+            };
+            setUser(loggedUser);
+            setAuthCookie("admin_auth_session", JSON.stringify(loggedUser), 7);
+            setAuthCookie("admin_token", loggedUser.id, 7);
+            setIsLoading(false);
+            return;
+          } else {
+            // Sign out non-admin session
+            await supabase.auth.signOut();
+          }
         }
       } catch (e) {
         console.warn("Supabase auth check error:", e);
@@ -63,10 +84,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cookieUserStr = getAuthCookie("admin_auth_session");
       if (cookieUserStr) {
         try {
-          const cookieUser = JSON.parse(cookieUserStr);
-          setUser(cookieUser);
-          setIsLoading(false);
-          return;
+          const cookieUser: User = JSON.parse(cookieUserStr);
+          if (isAdminAccount(cookieUser.email, cookieUser.role)) {
+            setUser(cookieUser);
+            setIsLoading(false);
+            return;
+          } else {
+            deleteAuthCookie("admin_auth_session");
+            deleteAuthCookie("admin_token");
+          }
         } catch (e) {
           console.warn("Cookie parse error:", e);
         }
@@ -76,10 +102,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const savedUser = localStorage.getItem("admin_auth_user");
       if (savedUser) {
         try {
-          const parsed = JSON.parse(savedUser);
-          setUser(parsed);
-          setAuthCookie("admin_auth_session", savedUser, 7);
-          setAuthCookie("admin_token", parsed.id, 7);
+          const parsed: User = JSON.parse(savedUser);
+          if (isAdminAccount(parsed.email, parsed.role)) {
+            setUser(parsed);
+            setAuthCookie("admin_auth_session", savedUser, 7);
+            setAuthCookie("admin_token", parsed.id, 7);
+          } else {
+            localStorage.removeItem("admin_auth_user");
+            setUser(null);
+          }
         } catch (e) {
           setUser(null);
         }
@@ -96,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanPass = pass.trim();
 
     if (!cleanEmail || !cleanPass) {
-      return { success: false, error: "Vui lòng nhập đầy đủ Email và Mật khẩu." };
+      return { success: false, error: "Vui lòng nhập đầy đủ Email và Mật khẩu Admin." };
     }
 
     let loggedUser: User | null = null;
@@ -109,6 +140,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (!error && data?.user) {
+        const userRole = data.user.user_metadata?.role;
+        if (!isAdminAccount(data.user.email, userRole)) {
+          await supabase.auth.signOut();
+          return { success: false, error: "Tài khoản này không có quyền Quản trị (Admin)." };
+        }
+
         loggedUser = {
           id: data.user.id,
           name: data.user.user_metadata?.full_name || cleanEmail.split('@')[0],
@@ -121,13 +158,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn("Supabase auth login exception:", err);
     }
 
-    // 2. Admin Verification Check (Admin Accounts)
+    // 2. Admin Verification Check (Local / Direct Admin Accounts)
     if (!loggedUser) {
-      if (
-        cleanEmail.includes("admin") ||
-        cleanEmail === "admin@meohd.io.vn" ||
-        cleanEmail === "admin@adminpulse.io"
-      ) {
+      if (isAdminAccount(cleanEmail, null)) {
         if (cleanPass.length >= 6) {
           loggedUser = {
             id: "usr_admin_" + Date.now(),
@@ -137,8 +170,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80",
           };
         } else {
-          return { success: false, error: "Mật khẩu Admin phải có ít nhất 6 ký tự." };
+          return { success: false, error: "Mật khẩu tài khoản Admin phải có ít nhất 6 ký tự." };
         }
+      } else {
+        return { success: false, error: "Chỉ tài khoản Admin mới được phép truy cập vào trang quản trị." };
       }
     }
 
