@@ -39,6 +39,7 @@ export const ProductTable: React.FC = () => {
     setViewingProduct,
     toggleProductStatus,
     resetDemoData,
+    syncSupabaseData,
     showToast,
     updateProduct,
     deleteProduct
@@ -244,17 +245,28 @@ export const ProductTable: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold text-slate-400">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-400 mr-2">
             Hiển thị <span className="text-white font-bold">{filteredProducts.length}</span> / {products.length} sản phẩm DB
           </span>
           <button
-            onClick={resetDemoData}
-            title="Khôi phục dữ liệu sản phẩm mẫu Tiếng Việt"
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition text-xs font-semibold flex items-center gap-1.5"
+            onClick={async () => {
+              await syncSupabaseData();
+              showToast("Đã đồng bộ dữ liệu mới nhất từ Supabase DB!", "success");
+            }}
+            title="Đồng bộ lại dữ liệu trực tiếp từ Supabase DB"
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border border-slate-700 rounded-xl transition text-xs font-bold flex items-center gap-1.5"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Tải mẫu</span>
+            <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Làm mới DB</span>
+          </button>
+
+          <button
+            onClick={resetDemoData}
+            title="Nạp 4 sản phẩm mẫu Tiếng Việt vào Supabase DB"
+            className="px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-xl transition text-xs font-bold flex items-center gap-1.5"
+          >
+            <span>Nạp mẫu DB</span>
           </button>
         </div>
       </div>

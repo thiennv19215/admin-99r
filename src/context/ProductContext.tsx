@@ -336,9 +336,35 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     showToast(`Đã ${newStatus ? 'Bật' : 'Tắt'} trạng thái sản phẩm "${item.name}"`, newStatus ? "success" : "warning");
   };
 
-  const resetDemoData = () => {
-    saveProductsToStorage(INITIAL_VIETNAMESE_PRODUCTS);
-    showToast("Đã khôi phục dữ liệu sản phẩm mẫu Tiếng Việt", "info");
+  const resetDemoData = async () => {
+    showToast("Đang nạp dữ liệu mẫu vào Supabase DB...", "info");
+    try {
+      let insertedCount = 0;
+      for (const item of INITIAL_VIETNAMESE_PRODUCTS) {
+        const res = await createSupabaseProduct({
+          title: item.name,
+          prompt_text: item.prompt_text || item.description || "",
+          description: item.description,
+          ai_model: item.ai_model,
+          prompt_type: item.prompt_type,
+          thumbnail_url: item.image,
+          is_active: item.is_active,
+          is_hot: item.is_hot,
+        });
+        if (res.success) insertedCount++;
+      }
+
+      await syncSupabaseData();
+      if (insertedCount > 0) {
+        showToast(`Đã lưu ${insertedCount} sản phẩm mẫu vào Supabase DB!`, "success");
+      } else {
+        saveProductsToStorage(INITIAL_VIETNAMESE_PRODUCTS);
+        showToast("Đã nạp dữ liệu mẫu vào bộ nhớ tạm", "info");
+      }
+    } catch (e: any) {
+      saveProductsToStorage(INITIAL_VIETNAMESE_PRODUCTS);
+      showToast("Đã nạp dữ liệu mẫu vào bộ nhớ tạm", "warning");
+    }
   };
 
   // Filter & Sort computation
