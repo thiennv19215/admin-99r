@@ -36,28 +36,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Helper check for admin authorization
-  const isAdminAccount = (email?: string | null, userMeta?: any, appMeta?: any): boolean => {
-    if (!email) return false;
-    const lowerEmail = email.toLowerCase().trim();
+  // Verify admin authorization directly from Supabase Auth user & DB profiles table
+  const verifyAdminFromSupabase = async (supabaseUser: any): Promise<boolean> => {
+    if (!supabaseUser) return false;
 
-    // Whitelisted admin emails
-    const adminEmails = [
-      "thienwork1105@gmail.com",
-      "admin@meohd.io.vn",
-      "admin@adminpulse.io",
-    ];
+    // 1. Check metadata role in Supabase Auth user object
+    const userRole = supabaseUser.user_metadata?.role || supabaseUser.app_metadata?.role;
+    if (userRole) {
+      const roleStr = String(userRole).toLowerCase();
+      if (roleStr.includes("admin")) return true;
+      if (roleStr === "user" || roleStr === "member" || roleStr === "customer") {
+        return false;
+      }
+    }
 
-    if (adminEmails.includes(lowerEmail)) return true;
-    if (lowerEmail.startsWith("admin@") || lowerEmail.includes("admin")) return true;
+    // 2. Try checking 'profiles' or 'users' table in Supabase DB if present
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", supabaseUser.id)
+        .maybeSingle();
 
-    // Check user metadata role or app metadata role
-    const uRole = String(userMeta?.role || userMeta?.roles || "").toLowerCase();
-    const aRole = String(appMeta?.role || appMeta?.roles || "").toLowerCase();
+      if (profile?.role) {
+        const pRole = String(profile.role).toLowerCase();
+        return pRole.includes("admin");
+      }
+    } catch (e) {
+      // If table doesn't exist, ignore exception
+    }
 
-    if (uRole.includes("admin") || aRole.includes("admin")) return true;
-
-    // Any valid user authenticated in Supabase Auth is authorized
+    // 3. Any user authenticated in this Supabase Auth project is accepted by default
     return true;
   };
 
@@ -67,15 +76,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          const userEmail = session.user.email;
-
-          if (isAdminAccount(userEmail, session.user.user_metadata, session.user.app_metadata)) {
+          const isAllowed = await verifyAdminFromSupabase(session.user);
+          if (isAllowed) {
+            const userEmail = session.user.email || "";
             const loggedUser: User = {
               id: session.user.id,
-              name: session.user.user_metadata?.full_name || userEmail?.split('@')[0] || "Admin User",
-              email: userEmail || "thienwork1105@gmail.com",
-              role: "Super Admin",
-              avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80",
+              name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || userEmail.split('@')[0] || "Quản Trị Viên",
+              email: userEmail,
+              role: session.user.user_metadata?.role || "Super Admin",
+              avatar: session.user.user_metadata?.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80",
             };
             setUser(loggedUser);
             setAuthCookie("admin_auth_session", JSON.stringify(loggedUser), 7);
@@ -83,7 +92,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsLoading(false);
             return;
           } else {
-            // Sign out non-admin session
             await supabase.auth.signOut();
           }
         }
@@ -96,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (cookieUserStr) {
         try {
           const cookieUser: User = JSON.parse(cookieUserStr);
-          if (isAdminAccount(cookieUser.email, null, null)) {
+          if (cookieUser?.id) {
             setUser(cookieUser);
             setIsLoading(false);
             return;
@@ -114,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (savedUser) {
         try {
           const parsed: User = JSON.parse(savedUser);
-          if (isAdminAccount(parsed.email, null, null)) {
+          if (parsed?.id) {
             setUser(parsed);
             setAuthCookie("admin_auth_session", savedUser, 7);
             setAuthCookie("admin_token", parsed.id, 7);
@@ -141,46 +149,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: "Vui lòng nhập đầy đủ Email và Mật khẩu Admin." };
     }
 
-    let loggedUser: User | null = null;
-
-    // Authenticate strictly with Supabase Auth
     try {
+      // Authenticate strictly with Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPass,
       });
 
       if (error) {
-        return { success: false, error: "Tài khoản hoặc mật khẩu không chính xác." };
+        return { success: false, error: error.message || "Tài khoản hoặc mật khẩu không chính xác." };
       }
 
       if (data?.user) {
-        if (!isAdminAccount(data.user.email, data.user.user_metadata, data.user.app_metadata)) {
+        const isAllowed = await verifyAdminFromSupabase(data.user);
+        if (!isAllowed) {
           await supabase.auth.signOut();
           return { success: false, error: "Tài khoản này không có quyền Quản trị (Admin)." };
         }
 
-        loggedUser = {
+        const loggedUser: User = {
           id: data.user.id,
-          name: data.user.user_metadata?.full_name || cleanEmail.split('@')[0],
+          name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || cleanEmail.split('@')[0],
           email: data.user.email || cleanEmail,
-          role: "Super Admin",
-          avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80",
+          role: data.user.user_metadata?.role || "Super Admin",
+          avatar: data.user.user_metadata?.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80",
         };
-      }
-    } catch (err) {
-      console.warn("Supabase auth login exception:", err);
-      return { success: false, error: "Đã xảy ra lỗi khi kết nối với hệ thống xác thực Supabase." };
-    }
 
-    if (loggedUser) {
-      setUser(loggedUser);
-      const userStr = JSON.stringify(loggedUser);
-      localStorage.setItem("admin_auth_user", userStr);
-      // Save Session Cookie with 7 days expiration & SameSite=Lax
-      setAuthCookie("admin_auth_session", userStr, 7);
-      setAuthCookie("admin_token", loggedUser.id, 7);
-      return { success: true };
+        setUser(loggedUser);
+        const userStr = JSON.stringify(loggedUser);
+        localStorage.setItem("admin_auth_user", userStr);
+        setAuthCookie("admin_auth_session", userStr, 7);
+        setAuthCookie("admin_token", loggedUser.id, 7);
+        return { success: true };
+      }
+    } catch (err: any) {
+      console.warn("Supabase auth login exception:", err);
+      return { success: false, error: err?.message || "Đã xảy ra lỗi khi kết nối với hệ thống xác thực Supabase." };
     }
 
     return { success: false, error: "Tài khoản hoặc Mật khẩu Admin không chính xác." };
