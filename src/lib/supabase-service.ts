@@ -136,6 +136,9 @@ export async function createSupabaseProduct(payload: {
   is_hot?: boolean;
 }): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
+    const { data: authData } = await supabase.auth.getUser();
+    const currentUser = authData?.user;
+
     const slug = payload.title
       .toLowerCase()
       .normalize("NFD")
@@ -143,7 +146,7 @@ export async function createSupabaseProduct(payload: {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)+/g, "") || `prompt-${Date.now()}`;
 
-    const promptBody = {
+    const promptBody: any = {
       title: payload.title,
       prompt_text: payload.prompt_text,
       description: payload.description || "",
@@ -158,6 +161,10 @@ export async function createSupabaseProduct(payload: {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    if (currentUser?.id) {
+      promptBody.created_by = currentUser.id;
+    }
 
     // Attempt 1: Insert into 'prompts'
     const { data: prData, error: prErr } = await supabase

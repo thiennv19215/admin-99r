@@ -221,15 +221,39 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     is_active?: boolean;
     is_hot?: boolean;
   }) => {
+    const matchedCategory = categories.find(c => c.id === payload.category_id)?.name || payload.ai_model || "Tổng hợp";
+    
+    // 1. Instant local update for smooth UX
+    const localNewProd: Product = {
+      id: "prod_" + Date.now(),
+      name: payload.title,
+      sku: payload.title.toLowerCase().substring(0, 10).replace(/\s+/g, '-').toUpperCase(),
+      category: matchedCategory,
+      price: 250000,
+      stock: payload.is_active !== false ? 50 : 0,
+      image: payload.thumbnail_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop",
+      rating: payload.is_hot ? 5.0 : 4.8,
+      description: payload.prompt_text || payload.description || "",
+      ai_model: payload.ai_model || "ChatGPT",
+      prompt_type: payload.prompt_type || "text",
+      prompt_text: payload.prompt_text,
+      category_id: payload.category_id,
+      is_active: payload.is_active ?? true,
+      is_hot: !!payload.is_hot
+    };
+
+    const localUpdated = [localNewProd, ...products];
+    saveProductsToStorage(localUpdated);
+
+    // 2. Persist to Supabase DB
     const supaRes = await createSupabaseProduct(payload);
     
-    if (supaRes && !supaRes.success) {
-      showToast(`Lỗi thêm sản phẩm lên Supabase: ${supaRes.error}`, "danger");
-      throw new Error(supaRes.error || "Lỗi tạo sản phẩm trên Supabase");
+    if (supaRes && supaRes.success) {
+      await syncSupabaseData();
+      showToast(`Đã lưu sản phẩm "${payload.title}" lên Supabase DB thành công!`, "success");
+    } else {
+      showToast(`Đã lưu sản phẩm cục bộ (Lưu ý Supabase: ${supaRes?.error || 'RLSPolicy'})`, "warning");
     }
-
-    await syncSupabaseData();
-    showToast(`Đã thêm sản phẩm "${payload.title}" lên Supabase thành công`, "success");
   };
 
   const updateProduct = async (id: string, payload: {
@@ -243,27 +267,56 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     is_active?: boolean;
     is_hot?: boolean;
   }) => {
-    const res = await updateSupabaseProduct(id, payload);
-    if (res && !res.success) {
-      showToast(`Lỗi cập nhật sản phẩm: ${res.error}`, "danger");
-      throw new Error(res.error || "Lỗi cập nhật sản phẩm");
-    }
+    const matchedCategory = categories.find(c => c.id === payload.category_id)?.name;
 
-    await syncSupabaseData();
-    showToast(`Đã cập nhật sản phẩm thành công`, "success");
+    // 1. Instant local state update
+    const localUpdated = products.map(p => {
+      if (p.id === id) {
+        return {
+          ...p,
+          name: payload.title !== undefined ? payload.title : p.name,
+          category: matchedCategory || (payload.ai_model ? payload.ai_model : p.category),
+          image: payload.thumbnail_url !== undefined ? payload.thumbnail_url : p.image,
+          description: payload.description !== undefined ? payload.description : (payload.prompt_text || p.description),
+          ai_model: payload.ai_model !== undefined ? payload.ai_model : p.ai_model,
+          prompt_type: payload.prompt_type !== undefined ? payload.prompt_type : p.prompt_type,
+          prompt_text: payload.prompt_text !== undefined ? payload.prompt_text : p.prompt_text,
+          category_id: payload.category_id !== undefined ? payload.category_id : p.category_id,
+          is_active: payload.is_active !== undefined ? payload.is_active : p.is_active,
+          is_hot: payload.is_hot !== undefined ? payload.is_hot : p.is_hot,
+          stock: payload.is_active === false ? 0 : (p.stock || 25)
+        };
+      }
+      return p;
+    });
+
+    saveProductsToStorage(localUpdated);
+
+    // 2. Persist update to Supabase DB
+    const res = await updateSupabaseProduct(id, payload);
+    if (res && res.success) {
+      await syncSupabaseData();
+      showToast(`Đã cập nhật sản phẩm thành công`, "success");
+    } else {
+      showToast(`Đã lưu thay đổi sản phẩm cục bộ`, "info");
+    }
   };
 
   const deleteProduct = async (id: string) => {
     const item = products.find(p => p.id === id);
-    const res = await deleteSupabaseProduct(id);
-    
-    if (res && !res.success) {
-      showToast(`Lỗi xóa sản phẩm: ${res.error}`, "danger");
-      return;
-    }
 
-    await syncSupabaseData();
-    showToast(`Đã xóa sản phẩm "${item?.name || 'Sản phẩm'}" khỏi Supabase`, "danger");
+    // 1. Instant local deletion
+    const localUpdated = products.filter(p => p.id !== id);
+    saveProductsToStorage(localUpdated);
+
+    // 2. Delete from Supabase DB
+    const res = await deleteSupabaseProduct(id);
+    if (res && res.success) {
+      await syncSupabaseData();
+      showToast(`Đã xóa sản phẩm "${item?.name || 'Sản phẩm'}" khỏi Supabase`, "danger");
+    } else {
+      showToast(`Đã xóa sản phẩm khỏi bộ nhớ local`, "info");
+    }
   };
 
   const toggleProductStatus = async (id: string) => {
@@ -271,13 +324,15 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!item) return;
     const newStatus = !item.is_active;
 
-    const res = await updateSupabaseProduct(id, { is_active: newStatus });
-    if (res && !res.success) {
-      showToast(`Lỗi chuyển trạng thái: ${res.error}`, "danger");
-      return;
-    }
+    // 1. Instant local toggle
+    const localUpdated = products.map(p => p.id === id ? { ...p, is_active: newStatus, stock: newStatus ? 30 : 0 } : p);
+    saveProductsToStorage(localUpdated);
 
-    await syncSupabaseData();
+    // 2. Update status in Supabase DB
+    const res = await updateSupabaseProduct(id, { is_active: newStatus });
+    if (res && res.success) {
+      await syncSupabaseData();
+    }
     showToast(`Đã ${newStatus ? 'Bật' : 'Tắt'} trạng thái sản phẩm "${item.name}"`, newStatus ? "success" : "warning");
   };
 
