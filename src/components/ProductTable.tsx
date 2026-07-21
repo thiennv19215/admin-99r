@@ -41,6 +41,7 @@ export const ProductTable: React.FC = () => {
     toggleProductStatus,
     resetDemoData,
     syncSupabaseData,
+    isSyncingData,
     showToast,
     updateProduct,
     deleteProduct
@@ -259,15 +260,16 @@ export const ProductTable: React.FC = () => {
             Hiển thị <span className="text-white font-bold">{filteredProducts.length}</span> / {products.length} sản phẩm DB
           </span>
           <button
+            disabled={isSyncingData}
             onClick={async () => {
               await syncSupabaseData();
               showToast("Đã đồng bộ dữ liệu mới nhất từ Supabase DB!", "success");
             }}
             title="Đồng bộ lại dữ liệu trực tiếp từ Supabase DB"
-            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border border-slate-700 rounded-xl transition text-xs font-bold flex items-center gap-1.5"
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border border-slate-700 rounded-xl transition text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Làm mới DB</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-indigo-400 ${isSyncingData ? 'animate-spin' : ''}`} />
+            <span>{isSyncingData ? "Đang đồng bộ..." : "Làm mới DB"}</span>
           </button>
 
           <button
@@ -304,7 +306,29 @@ export const ProductTable: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-200">
-              {paginatedProducts.length === 0 ? (
+              {isSyncingData ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse border-b border-slate-800/60">
+                    <td className="py-4 px-4 text-center">
+                      <div className="w-4 h-4 bg-slate-800 rounded mx-auto" />
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-11 h-11 bg-slate-800 rounded-xl shrink-0" />
+                        <div className="space-y-2 flex-1">
+                          <div className="h-4 bg-slate-800 rounded w-3/4" />
+                          <div className="h-3 bg-slate-800/60 rounded w-1/3" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4"><div className="h-6 bg-slate-800 rounded-lg w-24" /></td>
+                    <td className="py-4 px-4"><div className="h-5 bg-slate-800 rounded w-20" /></td>
+                    <td className="py-4 px-4"><div className="h-6 bg-slate-800 rounded-full w-14" /></td>
+                    <td className="py-4 px-4"><div className="h-5 bg-slate-800 rounded w-16" /></td>
+                    <td className="py-4 px-4 text-right"><div className="h-8 bg-slate-800 rounded-lg w-28 ml-auto" /></td>
+                  </tr>
+                ))
+              ) : paginatedProducts.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-500">
                     <p className="text-base font-bold text-slate-400">Không tìm thấy sản phẩm phù hợp</p>

@@ -138,6 +138,7 @@ interface ProductContextType {
   
   // Supabase Status & UI
   isSupabaseConnected: boolean;
+  isSyncingData: boolean;
   theme: "light" | "dark";
   toggleTheme: () => void;
   toasts: ToastMessage[];
@@ -162,6 +163,7 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
 
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
+  const [isSyncingData, setIsSyncingData] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -196,6 +198,7 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Sync Supabase products & categories
   const syncSupabaseData = async () => {
+    setIsSyncingData(true);
     try {
       const dbCats = await getCategories();
       setCategories(dbCats);
@@ -214,6 +217,8 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.error("Supabase sync error:", e);
       const saved = localStorage.getItem("next_admin_products");
       setProducts(saved ? JSON.parse(saved) : INITIAL_VIETNAMESE_PRODUCTS);
+    } finally {
+      setIsSyncingData(false);
     }
   };
 
@@ -459,6 +464,7 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
         resetDemoData,
         syncSupabaseData,
         isSupabaseConnected,
+        isSyncingData,
         theme,
         toggleTheme,
         toasts,
