@@ -11,6 +11,7 @@ import { ProductTable } from "@/components/ProductTable";
 import { ProductFormModal } from "@/components/ProductFormModal";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
+import { CategoryModal } from "@/components/CategoryModal";
 import { ToastContainer } from "@/components/ToastContainer";
 
 export default function Home() {
@@ -55,6 +56,7 @@ export default function Home() {
       <ProductFormModal />
       <ProductDetailModal />
       <DeleteConfirmModal />
+      <CategoryModal />
       <ToastContainer />
     </div>
   );

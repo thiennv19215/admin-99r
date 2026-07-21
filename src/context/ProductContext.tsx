@@ -7,7 +7,9 @@ import {
   createSupabaseProduct,
   updateSupabaseProduct,
   deleteSupabaseProduct,
-  getCategories
+  getCategories,
+  createSupabaseCategory,
+  deleteSupabaseCategory
 } from "@/lib/supabase-service";
 
 const INITIAL_VIETNAMESE_PRODUCTS: Product[] = [
@@ -93,12 +95,18 @@ interface ProductContextType {
   // Modals & Active State
   isAddModalOpen: boolean;
   setIsAddModalOpen: (open: boolean) => void;
+  isCategoryModalOpen: boolean;
+  setIsCategoryModalOpen: (open: boolean) => void;
   editingProduct: Product | null;
   setEditingProduct: (p: Product | null) => void;
   deletingProduct: Product | null;
   setDeletingProduct: (p: Product | null) => void;
   viewingProduct: Product | null;
   setViewingProduct: (p: Product | null) => void;
+  
+  // Category CRUD
+  addCategory: (name: string, description?: string) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
   
   // CRUD Actions & Quick Toggles
   addProduct: (productData: {
@@ -148,6 +156,7 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [sortBy, setSortBy] = useState<SortOption>("default");
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
@@ -155,6 +164,35 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addCategory = async (name: string, description?: string) => {
+    const res = await createSupabaseCategory(name, description);
+    if (!res.success) {
+      const newCat: Category = {
+        id: "cat_" + Date.now(),
+        name: name.trim(),
+        description: description?.trim() || ""
+      };
+      setCategories(prev => [...prev, newCat]);
+      showToast(`Đã thêm ngành prompt "${name}" vào bộ nhớ tạm`, "info");
+      return;
+    }
+    const freshCats = await getCategories();
+    setCategories(freshCats);
+    showToast(`Đã thêm ngành/danh mục prompt "${name}" lên Supabase thành công!`, "success");
+  };
+
+  const deleteCategory = async (id: string) => {
+    const cat = categories.find(c => c.id === id);
+    const res = await deleteSupabaseCategory(id);
+    if (res.success) {
+      const freshCats = await getCategories();
+      setCategories(freshCats);
+    } else {
+      setCategories(prev => prev.filter(c => c.id !== id));
+    }
+    showToast(`Đã xóa ngành/danh mục "${cat?.name || 'Danh mục'}"`, "warning");
+  };
 
   // Sync Supabase products & categories
   const syncSupabaseData = async () => {
@@ -404,12 +442,16 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setSortBy,
         isAddModalOpen,
         setIsAddModalOpen,
+        isCategoryModalOpen,
+        setIsCategoryModalOpen,
         editingProduct,
         setEditingProduct,
         deletingProduct,
         setDeletingProduct,
         viewingProduct,
         setViewingProduct,
+        addCategory,
+        deleteCategory,
         addProduct,
         updateProduct,
         deleteProduct,

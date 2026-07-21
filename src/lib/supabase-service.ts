@@ -68,6 +68,46 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 /**
+ * Insert new category into Supabase 'categories' table
+ */
+export async function createSupabaseCategory(name: string, description?: string): Promise<{ success: boolean; data?: Category; error?: string }> {
+  try {
+    const slug = name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)+/g, "") || `cat-${Date.now()}`;
+
+    const { data, error } = await supabase
+      .from("categories")
+      .insert([{ name: name.trim(), slug, description: description?.trim() || "" }])
+      .select()
+      .single();
+
+    if (!error && data) {
+      return { success: true, data };
+    }
+    return { success: false, error: error?.message || "Lỗi tạo danh mục trên Supabase" };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Delete category from Supabase 'categories' table
+ */
+export async function deleteSupabaseCategory(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.from("categories").delete().eq("id", id);
+    if (!error) return { success: true };
+    return { success: false, error: error.message };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Fetch products from Supabase 'prompts' or 'products' table
  */
 export async function fetchSupabaseProducts(): Promise<{ products: Product[]; rawPrompts: ProductPrompt[] }> {

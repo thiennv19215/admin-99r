@@ -34,6 +34,7 @@ export const ProductTable: React.FC = () => {
     setStockFilter,
     sortBy,
     setSortBy,
+    setIsCategoryModalOpen,
     setEditingProduct,
     setDeletingProduct,
     setViewingProduct,
@@ -196,21 +197,29 @@ export const ProductTable: React.FC = () => {
       {/* Controls Bar */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Category Dropdown */}
-          <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-xs">
+          {/* Category Dropdown & Manager */}
+          <div className="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-xs">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="bg-transparent text-slate-200 outline-none cursor-pointer font-semibold"
             >
-              <option value="all" className="bg-slate-900 text-white">Tất cả danh mục</option>
+              <option value="all" className="bg-slate-900 text-white">Tất cả danh mục ({uniqueCategories.length})</option>
               {uniqueCategories.map((cat) => (
                 <option key={cat} value={cat} className="bg-slate-900 text-white">
                   {cat}
                 </option>
               ))}
             </select>
+            <button
+              onClick={() => setIsCategoryModalOpen(true)}
+              title="Quản lý & Thêm ngành prompt mới"
+              className="ml-1 text-[11px] font-bold text-indigo-400 hover:text-white hover:bg-indigo-600/30 px-2 py-0.5 rounded-lg border border-indigo-500/30 transition flex items-center gap-1"
+            >
+              <Layers className="w-3 h-3" />
+              <span>+ Ngành Prompt</span>
+            </button>
           </div>
 
           {/* Stock Filter */}
