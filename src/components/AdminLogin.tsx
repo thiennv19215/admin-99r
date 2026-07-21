@@ -6,8 +6,8 @@ import { Lock, Mail, Eye, EyeOff, ShieldCheck, ArrowRight, KeyRound } from "luci
 
 export const AdminLogin: React.FC = () => {
   const { login } = useAuth();
-  const [email, setEmail] = useState("admin@meohd.io.vn");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,12 +23,6 @@ export const AdminLogin: React.FC = () => {
     if (!res.success) {
       setError(res.error || "Tài khoản hoặc mật khẩu Admin không chính xác.");
     }
-  };
-
-  const fillDemoCredentials = () => {
-    setEmail("admin@meohd.io.vn");
-    setPassword("admin123");
-    setError("");
   };
 
   return (
@@ -103,14 +97,6 @@ export const AdminLogin: React.FC = () => {
               <input type="checkbox" defaultChecked className="rounded border-slate-700 bg-slate-800 text-indigo-500 focus:ring-indigo-500" />
               <span>Duy trì đăng nhập</span>
             </label>
-            <button
-              type="button"
-              onClick={fillDemoCredentials}
-              className="text-indigo-400 hover:underline font-bold flex items-center gap-1"
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>Điền tài khoản Admin</span>
-            </button>
           </div>
 
           <button

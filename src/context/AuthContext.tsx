@@ -132,14 +132,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let loggedUser: User | null = null;
 
-    // 1. Try Supabase Auth
+    // Authenticate strictly with Supabase Auth
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPass,
       });
 
-      if (!error && data?.user) {
+      if (error) {
+        return { success: false, error: "Tài khoản hoặc mật khẩu không chính xác." };
+      }
+
+      if (data?.user) {
         const userRole = data.user.user_metadata?.role;
         if (!isAdminAccount(data.user.email, userRole)) {
           await supabase.auth.signOut();
@@ -156,25 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {
       console.warn("Supabase auth login exception:", err);
-    }
-
-    // 2. Admin Verification Check (Local / Direct Admin Accounts)
-    if (!loggedUser) {
-      if (isAdminAccount(cleanEmail, null)) {
-        if (cleanPass.length >= 6) {
-          loggedUser = {
-            id: "usr_admin_" + Date.now(),
-            name: "Quản Trị Viên (Admin)",
-            email: cleanEmail,
-            role: "Super Admin",
-            avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80",
-          };
-        } else {
-          return { success: false, error: "Mật khẩu tài khoản Admin phải có ít nhất 6 ký tự." };
-        }
-      } else {
-        return { success: false, error: "Chỉ tài khoản Admin mới được phép truy cập vào trang quản trị." };
-      }
+      return { success: false, error: "Đã xảy ra lỗi khi kết nối với hệ thống xác thực Supabase." };
     }
 
     if (loggedUser) {
