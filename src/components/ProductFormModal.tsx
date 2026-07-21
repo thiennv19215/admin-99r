@@ -46,7 +46,7 @@ export const ProductFormModal: React.FC = () => {
       setDescription("");
       setCategoryId(categories.length > 0 ? categories[0].id : "");
       setAiModel("ChatGPT");
-      setPromptType("text");
+      setPromptType("image");
       setThumbnailUrl("");
       setIsActive(true);
       setIsHot(false);
@@ -220,10 +220,8 @@ export const ProductFormModal: React.FC = () => {
               onChange={(e) => setPromptType(e.target.value)}
               className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
-              <option value="text">Văn bản / Text</option>
               <option value="image">Hình ảnh / Image</option>
-              <option value="video">Video AI (Veo 3)</option>
-              <option value="code">Mã nguồn / Code</option>
+              <option value="video">Video / Video AI</option>
             </select>
           </div>
 
