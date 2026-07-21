@@ -37,16 +37,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   // Helper check for admin authorization
-  const isAdminAccount = (email?: string | null, metadataRole?: string | null): boolean => {
+  const isAdminAccount = (email?: string | null, userMeta?: any, appMeta?: any): boolean => {
     if (!email) return false;
     const lowerEmail = email.toLowerCase().trim();
-    if (metadataRole === "admin" || metadataRole === "Super Admin") return true;
-    return (
-      lowerEmail === "admin@meohd.io.vn" ||
-      lowerEmail === "admin@adminpulse.io" ||
-      lowerEmail.startsWith("admin@") ||
-      lowerEmail.includes("admin")
-    );
+
+    // Whitelisted admin emails
+    const adminEmails = [
+      "thienwork1105@gmail.com",
+      "admin@meohd.io.vn",
+      "admin@adminpulse.io",
+    ];
+
+    if (adminEmails.includes(lowerEmail)) return true;
+    if (lowerEmail.startsWith("admin@") || lowerEmail.includes("admin")) return true;
+
+    // Check user metadata role or app metadata role
+    const uRole = String(userMeta?.role || userMeta?.roles || "").toLowerCase();
+    const aRole = String(appMeta?.role || appMeta?.roles || "").toLowerCase();
+
+    if (uRole.includes("admin") || aRole.includes("admin")) return true;
+
+    // Any valid user authenticated in Supabase Auth is authorized
+    return true;
   };
 
   useEffect(() => {
@@ -56,13 +68,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           const userEmail = session.user.email;
-          const userRole = session.user.user_metadata?.role;
 
-          if (isAdminAccount(userEmail, userRole)) {
+          if (isAdminAccount(userEmail, session.user.user_metadata, session.user.app_metadata)) {
             const loggedUser: User = {
               id: session.user.id,
               name: session.user.user_metadata?.full_name || userEmail?.split('@')[0] || "Admin User",
-              email: userEmail || "admin@meohd.io.vn",
+              email: userEmail || "thienwork1105@gmail.com",
               role: "Super Admin",
               avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&q=80",
             };
@@ -85,7 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (cookieUserStr) {
         try {
           const cookieUser: User = JSON.parse(cookieUserStr);
-          if (isAdminAccount(cookieUser.email, cookieUser.role)) {
+          if (isAdminAccount(cookieUser.email, null, null)) {
             setUser(cookieUser);
             setIsLoading(false);
             return;
@@ -103,7 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (savedUser) {
         try {
           const parsed: User = JSON.parse(savedUser);
-          if (isAdminAccount(parsed.email, parsed.role)) {
+          if (isAdminAccount(parsed.email, null, null)) {
             setUser(parsed);
             setAuthCookie("admin_auth_session", savedUser, 7);
             setAuthCookie("admin_token", parsed.id, 7);
@@ -144,8 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data?.user) {
-        const userRole = data.user.user_metadata?.role;
-        if (!isAdminAccount(data.user.email, userRole)) {
+        if (!isAdminAccount(data.user.email, data.user.user_metadata, data.user.app_metadata)) {
           await supabase.auth.signOut();
           return { success: false, error: "Tài khoản này không có quyền Quản trị (Admin)." };
         }
